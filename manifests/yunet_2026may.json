@@ -1,0 +1,29 @@
+{
+  "id": "yunet_2026may",
+  "version": "2026may-26cc381e4d25",
+  "file": "face/face_detection_yunet_2026may.onnx",
+  "sha256": "ebafce4e3c118d6554634be5c27ab333b4c047a9a8c3faf1d7cf93101c22f0f0",
+  "source_url": "https://media.githubusercontent.com/media/opencv/opencv_zoo/26cc381e4d2594bb9f47a26eb8fd96c94a13660d/models/face_detection_yunet/face_detection_yunet_2026may.onnx",
+  "license": "MIT",
+  "model_license": "MIT",
+  "commercial_use": "yes",
+  "redistribution": "allowed under MIT, with its notice; the training data (WIDER FACE) is CC BY-NC-ND 4.0, a recorded risk, see ModelCard",
+  "modification": "allowed under MIT",
+  "status": "approved",
+  "inputs": [{"name": "input", "element_type": "float32", "shape": [1, 3, -1, -1]}],
+  "outputs": [
+    {"name": "cls_8", "element_type": "float32", "shape": [1, -1, 1]},
+    {"name": "cls_16", "element_type": "float32", "shape": [1, -1, 1]},
+    {"name": "cls_32", "element_type": "float32", "shape": [1, -1, 1]},
+    {"name": "obj_8", "element_type": "float32", "shape": [1, -1, 1]},
+    {"name": "obj_16", "element_type": "float32", "shape": [1, -1, 1]},
+    {"name": "obj_32", "element_type": "float32", "shape": [1, -1, 1]},
+    {"name": "bbox_8", "element_type": "float32", "shape": [1, -1, 4]},
+    {"name": "bbox_16", "element_type": "float32", "shape": [1, -1, 4]},
+    {"name": "bbox_32", "element_type": "float32", "shape": [1, -1, 4]},
+    {"name": "kps_8", "element_type": "float32", "shape": [1, -1, 10]},
+    {"name": "kps_16", "element_type": "float32", "shape": [1, -1, 10]},
+    {"name": "kps_32", "element_type": "float32", "shape": [1, -1, 10]}
+  ],
+  "precision": "fp32"
+}
