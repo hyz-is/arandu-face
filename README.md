@@ -5,7 +5,7 @@
 # Arandu Face
 
 An Arandu package that measures faces with ONNX models, run through ONNX
-Runtime by [`arandu-onnx`](https://github.com/kuaa-io/arandu-onnx). It
+Runtime by [`arandu-onnx`](https://github.com/hyz-is/arandu-onnx). It
 returns **separate, auditable technical signals**, each with the provenance of
 the model behind it: where a face is and where its landmarks are, how it was
 aligned, how sharp, lit and posed it is, its embedding, the distance between
@@ -94,13 +94,13 @@ Development and the tests use 1.30.0.
 ## Install
 
 ```bash
-go get github.com/kuaa-io/arandu-face
+go get github.com/hyz-is/arandu-face
 ```
 
 Until `arandu-onnx` is tagged, `go.mod` resolves it from the sibling checkout:
 
 ```
-replace github.com/kuaa-io/arandu-onnx => ../arandu-onnx
+replace github.com/hyz-is/arandu-onnx => ../arandu-onnx
 ```
 
 That line is removed, and `arandu-onnx` required at its tag, once that module
@@ -142,8 +142,8 @@ A models directory holds each file at the path its manifest's `file` says
 `cmd/face-models` fills one:
 
 ```bash
-go run github.com/kuaa-io/arandu-face/cmd/face-models -dir /srv/models
-go run github.com/kuaa-io/arandu-face/cmd/face-models -dir /srv/models -check
+go run github.com/hyz-is/arandu-face/cmd/face-models -dir /srv/models
+go run github.com/hyz-is/arandu-face/cmd/face-models -dir /srv/models -check
 ```
 
 It downloads each file over HTTPS from the source its manifest records,
@@ -164,8 +164,8 @@ The imports, with the other module imports:
 
 ```go
 import (
-	onnx "github.com/kuaa-io/arandu-onnx"
-	face "github.com/kuaa-io/arandu-face"
+	onnx "github.com/hyz-is/arandu-onnx"
+	face "github.com/hyz-is/arandu-face"
 )
 ```
 

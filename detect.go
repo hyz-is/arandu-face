@@ -9,7 +9,7 @@ import (
 	"image/draw"
 	"math"
 
-	onnx "github.com/kuaa-io/arandu-onnx"
+	onnx "github.com/hyz-is/arandu-onnx"
 )
 
 // The landmark schemes a Face may carry.

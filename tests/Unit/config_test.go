@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	face "github.com/kuaa-io/arandu-face"
+	face "github.com/hyz-is/arandu-face"
 )
 
 func TestConfigValidateRefusesWhatCannotWork(t *testing.T) {

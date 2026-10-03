@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	face "github.com/kuaa-io/arandu-face"
+	face "github.com/hyz-is/arandu-face"
 )
 
 // uniform is a w by h image of one grey.

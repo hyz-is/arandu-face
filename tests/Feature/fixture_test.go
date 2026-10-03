@@ -11,8 +11,8 @@ import (
 	"runtime"
 	"testing"
 
-	face "github.com/kuaa-io/arandu-face"
-	onnx "github.com/kuaa-io/arandu-onnx"
+	face "github.com/hyz-is/arandu-face"
+	onnx "github.com/hyz-is/arandu-onnx"
 )
 
 // These helpers load the real models and draw the images the tests read.

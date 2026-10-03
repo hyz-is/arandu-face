@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	face "github.com/kuaa-io/arandu-face"
+	face "github.com/hyz-is/arandu-face"
 )
 
 // The benchmarks time each stage on the 480×560 cartoon, one call at a time:

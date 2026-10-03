@@ -6,7 +6,7 @@ import (
 	"image"
 	"math"
 
-	onnx "github.com/kuaa-io/arandu-onnx"
+	onnx "github.com/hyz-is/arandu-onnx"
 )
 
 // AlignedSize is the side of the square crop Align produces, which is the

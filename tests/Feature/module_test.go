@@ -12,8 +12,8 @@ import (
 	"github.com/arandu-io/framework/foundation"
 	fhttp "github.com/arandu-io/framework/http"
 
-	face "github.com/kuaa-io/arandu-face"
-	onnx "github.com/kuaa-io/arandu-onnx"
+	face "github.com/hyz-is/arandu-face"
+	onnx "github.com/hyz-is/arandu-onnx"
 )
 
 // These tests drive the module the way an application does: build it,

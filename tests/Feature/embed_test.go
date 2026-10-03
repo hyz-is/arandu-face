@@ -6,7 +6,7 @@ import (
 	"math"
 	"testing"
 
-	face "github.com/kuaa-io/arandu-face"
+	face "github.com/hyz-is/arandu-face"
 )
 
 // These tests run SFace on synthetic crops. They hold the shape of the

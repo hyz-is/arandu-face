@@ -6,7 +6,7 @@ import (
 	"math"
 	"testing"
 
-	face "github.com/kuaa-io/arandu-face"
+	face "github.com/hyz-is/arandu-face"
 )
 
 // similarity is s·R(θ) plus (tx, ty), θ counter-clockwise in degrees.

@@ -5,8 +5,8 @@ import (
 	"math"
 	"testing"
 
-	face "github.com/kuaa-io/arandu-face"
-	onnx "github.com/kuaa-io/arandu-onnx"
+	face "github.com/hyz-is/arandu-face"
+	onnx "github.com/hyz-is/arandu-onnx"
 )
 
 var sface = onnx.ModelInfo{ID: face.ModelSFace, Version: "2021dec-ba91a3b91d00", SHA256: "0ba9fbfa", Status: onnx.StatusDevOnly}

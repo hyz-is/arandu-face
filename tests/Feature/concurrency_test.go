@@ -5,7 +5,7 @@ import (
 	"sync"
 	"testing"
 
-	face "github.com/kuaa-io/arandu-face"
+	face "github.com/hyz-is/arandu-face"
 )
 
 // TestStagesRunConcurrently runs every model stage from many goroutines on

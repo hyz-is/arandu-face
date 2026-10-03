@@ -7,7 +7,7 @@ import (
 	"image/color"
 	"math"
 
-	onnx "github.com/kuaa-io/arandu-onnx"
+	onnx "github.com/hyz-is/arandu-onnx"
 )
 
 // MiVOLOInputSize is the side of each square crop MiVOLO reads.

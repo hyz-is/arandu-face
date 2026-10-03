@@ -4,7 +4,7 @@ import (
 	"math"
 	"testing"
 
-	face "github.com/kuaa-io/arandu-face"
+	face "github.com/hyz-is/arandu-face"
 )
 
 const eps = 1e-9

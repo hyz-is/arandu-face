@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"math"
 
-	onnx "github.com/kuaa-io/arandu-onnx"
+	onnx "github.com/hyz-is/arandu-onnx"
 )
 
 // YuNetStrides are the feature-map strides YuNet predicts at, in the order

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	face "github.com/kuaa-io/arandu-face"
+	face "github.com/hyz-is/arandu-face"
 )
 
 // MiVOLO runs here on drawings and gradients, so what is held is the shape of

@@ -7,7 +7,7 @@
 // anything. Run it once, where the application is deployed or when the image
 // is built:
 //
-//	go run github.com/kuaa-io/arandu-face/cmd/face-models -dir /srv/models
+//	go run github.com/hyz-is/arandu-face/cmd/face-models -dir /srv/models
 //
 // Each file is fetched over HTTPS from the source_url its manifest records,
 // which pins a revision (or, for a release asset, a release whose digest the
@@ -33,8 +33,8 @@ import (
 	"strings"
 	"time"
 
-	face "github.com/kuaa-io/arandu-face"
-	onnx "github.com/kuaa-io/arandu-onnx"
+	face "github.com/hyz-is/arandu-face"
+	onnx "github.com/hyz-is/arandu-onnx"
 )
 
 // maxModelBytes caps one download. The largest model is under 120 MB.

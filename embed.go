@@ -7,7 +7,7 @@ import (
 	"image"
 	"math"
 
-	onnx "github.com/kuaa-io/arandu-onnx"
+	onnx "github.com/hyz-is/arandu-onnx"
 )
 
 // NormalizationL2 is the normalization Embed applies: the vector divided by

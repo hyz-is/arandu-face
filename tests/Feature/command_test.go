@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	face "github.com/kuaa-io/arandu-face"
+	face "github.com/hyz-is/arandu-face"
 )
 
 // The download command is exercised here only in -check mode, which reads the
