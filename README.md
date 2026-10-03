@@ -28,6 +28,133 @@ Each stage is its own call, with its own result:
 No function runs two stages for the caller. Nothing returns a boolean
 verdict.
 
+## What it is not
+
+- **Not a decision.** It never says two faces are the same person, a selfie is
+  acceptable or someone is an adult. Signals, never decisions: thresholds come
+  back as versioned reference parameters beside each measurement, and the
+  application's decision layer applies its own policy and records the evidence.
+- **Not a demographic classifier.** No model here infers race, ethnicity or
+  gender, and a unit test refuses any manifest for one, or for a
+  non-commercial recognizer (InsightFace, ArcFace, EdgeFace weights).
+- **Not a model distribution.** The model weights are not in this repository.
+  A separate command downloads them from their pinned sources and verifies
+  their digests; see [THIRD_PARTY_MODELS.md](THIRD_PARTY_MODELS.md).
+- **Not a store.** It keeps no image, no embedding and no result, and opens no
+  network connection.
+
+## Requirements
+
+| | |
+| --- | --- |
+| Go | 1.26 or later |
+| cgo | `CGO_ENABLED=1` and a C compiler (the ONNX Runtime binding is cgo) |
+| ONNX Runtime | the shared library, **1.26 or later**; development and CI use **1.30.0**. Installation per operating system is in the [`arandu-onnx` README](https://github.com/hyz-is/arandu-onnx#installing-onnx-runtime) (`brew install onnxruntime` on macOS; the release archive on Linux) |
+| Arandu | framework 0.50 or later, and `github.com/hyz-is/arandu-onnx` |
+| Models | 230 KB (YuNet) or 471 KB (BlazeFace) for detection alone; 39 MB more for embedding, 118 MB more for age. Fetched once with `cmd/face-models` |
+
+## Install
+
+```bash
+go get github.com/hyz-is/arandu-face@v0.1.0
+go run github.com/hyz-is/arandu-face/cmd/face-models@v0.1.0 -dir /srv/models
+```
+
+## Wire it
+
+An Arandu application registers a module explicitly. There is no service
+provider, no container and no discovery, so these are the lines to paste into
+`bootstrap/app.go` and there are no others.
+
+The imports, with the other module imports:
+
+```go
+import (
+	onnx "github.com/hyz-is/arandu-onnx"
+	face "github.com/hyz-is/arandu-face"
+)
+```
+
+The construction, in `Build`, before `k.Register`, after the ONNX module. Every
+value comes from the application's own typed configuration; this package reads
+no environment variable:
+
+```go
+	faceModule, err := face.New(face.Config{
+		ModelsDir:       cfg.Face.ModelsDir,
+		Detector:        face.DetectorYuNet,
+		EnableEmbedding: cfg.Face.Embedding,
+		EnableAge:       cfg.Face.Age,
+		RefuseDevOnly:   cfg.Face.Production,
+	}, onnxModule.Runtime())
+	if err != nil {
+		return App{}, err
+	}
+```
+
+And the registration, inside the `k.Register(...)` call already there, after
+`onnxModule`:
+
+```go
+		onnxModule,
+		faceModule,
+```
+
+`Boot` initializes the runtime if `arandu-onnx` has not yet, and opens the
+configured models, verifying each; a missing or altered file stops the boot,
+naming the model. With `RefuseDevOnly` set, a configuration that needs a
+dev-only model (SFace, MiVOLO) stops the boot before any file is read, with
+`ErrDevOnlyRefused`. `Health` reports whether the models are open and the
+runtime under them is usable. `Models` lists the `ModelInfo` of each open
+model. `Close` closes the sessions. Registering it adds no route, no table and
+no background loop.
+
+## Configuration
+
+| Field | Default | What it does |
+| --- | --- | --- |
+| `ModelsDir` | required | The directory the model files are in |
+| `Detector` | `yunet` | `yunet` or `blazeface` (selfies) |
+| `EnableEmbedding` | `false` | Open SFace at Boot, for Embed |
+| `EnableAge` | `false` | Open MiVOLO at Boot, for EstimateAge |
+| `RefuseDevOnly` | `false` | Refuse every configured dev-only model at Boot — the production switch |
+| `DetectMaxSide` | `640` | Longest side YuNet sees, 32 to 4096 |
+| `ScoreThreshold` | `0.9` YuNet, `0.5` BlazeFace | Score a detection needs to be kept |
+| `NMSThreshold` | `0.3` | IoU above which a detection is suppressed |
+| `TopK` | `5000` | Candidates YuNet's suppression considers |
+| `Thresholds` | `SFaceReferenceThresholds()` | The reference values Compare returns |
+| `Quality` | `DefaultQualityThresholds()` | The bounds Quality checks against |
+
+A numeric field left at zero, and a threshold set left without a version,
+takes its default.
+
+## Measure a face
+
+```go
+img, err := onnx.DecodeImage(upload) // JPEG or PNG, turned upright by EXIF
+
+faces, err := faceModule.Detect(ctx, img)       // stage 1: boxes, landmarks, detector ModelInfo
+aligned, err := face.Align(img, faces[0].Landmarks) // stage 2: 112×112 crop and transform
+report, err := faceModule.Quality(img, faces[0])     // stage 3: signals and per-signal checks
+probe, err := faceModule.Embed(ctx, aligned.Image)   // stage 4: unit vector, SFace ModelInfo
+cmp, err := faceModule.Compare(probe, reference)     // stage 5: cosine, L2, ThresholdSet
+age, err := faceModule.EstimateAge(ctx, img, faces[0], nil) // stage 6: years, MiVOLO ModelInfo
+```
+
+Every model-backed result carries an `onnx.ModelInfo` — ID, Version, SHA256,
+Runtime, Precision, Provider and Status — which is what the application
+records as evidence beside the signal. A `dev-only` status in that record says
+the signal came from a model not cleared for production.
+
+Every `Face` is in the coordinates of the image as given, including a
+sub-image's offset. Its `Parameters` record the score threshold, NMS
+threshold, top-k, the input size the detector read and the scale applied.
+
+The pure-Go pieces are exported for reuse and testing: `DecodeYuNet`,
+`YuNetPaddedSize`, `BlazeFaceAnchors`, `DecodeBlazeFace`, `NMS`, `WeightedNMS`,
+`IoU`, `DecomposeSVD2`, `EstimateSimilarity`, `WarpAffine`, `LaplacianVariance`,
+`L2Normalize` and `RawPlanes`.
+
 ## How each stage works
 
 1. **Detection with YuNet** (default). The image is scaled down so its longer
@@ -85,169 +212,60 @@ The constants are those of OpenCV's `FaceDetectorYN` and `FaceRecognizerSF`,
 MediaPipe's short-range detector graph, and MiVOLO's preprocessing; the unit
 tests pin them with values worked out by hand.
 
-## Build requirement
-
-Those of `arandu-onnx`: `CGO_ENABLED=1`, a C compiler, and the ONNX Runtime
-shared library, 1.26 or later, on the machine that runs the application.
-Development and the tests use 1.30.0.
-
-## Install
-
-```bash
-go get github.com/hyz-is/arandu-face
-```
-
-Until `arandu-onnx` is tagged, `go.mod` resolves it from the sibling checkout:
-
-```
-replace github.com/hyz-is/arandu-onnx => ../arandu-onnx
-```
-
-That line is removed, and `arandu-onnx` required at its tag, once that module
-is published. The release workflow refuses to publish this one while it is
-there.
-
 ## The models
 
-The model files are not in this repository. Each has a manifest, embedded in
-the package under `manifests/`, recording its source revision, SHA-256,
-licences, status and contract; `Runtime.Open` verifies every file against it
-before ONNX Runtime reads a byte. What the manifest has no field for —
-training data, reported accuracy, caveats — is in its `ModelCard`
+The model files are not in this repository and are not distributed with it.
+Each has a manifest, embedded in the package under `manifests/`, recording its
+source, SHA-256, licences, status and contract; `Runtime.Open` verifies every
+file against it before ONNX Runtime reads a byte. What the manifest has no
+field for — training data, reported accuracy, caveats — is in its `ModelCard`
 (`LookupModelCard`).
 
-| id | model | source revision | sha256 | size | status |
+| id | file | sha256 | size | used by | status |
 | --- | --- | --- | --- | --- | --- |
-| `yunet_2026may` | YuNet 2026may, dynamic input | opencv_zoo `26cc381e4d25` | `ebafce4e3c11…` | 230 KB | approved |
-| `blazeface_short_range` | BlazeFace short range | yakhyo release `weights` | `2f2689b040be…` | 471 KB | approved |
-| `sface_2021dec` | SFace 2021dec | opencv_zoo `ba91a3b91d00` | `0ba9fbfa01b5…` | 39 MB | **dev-only** |
-| `mivolo_v2_age` | MiVOLO v2, age output | HF `8eb4cd8f5dd4` | `2db5e05be33b…` | 118 MB | **dev-only** |
+| `yunet_2026may` | `face/face_detection_yunet_2026may.onnx` | `ebafce4e3c118d6554634be5c27ab333b4c047a9a8c3faf1d7cf93101c22f0f0` | 230 KB | `Detect` (default) | approved |
+| `blazeface_short_range` | `face/face_detection_short_range.onnx` | `2f2689b040becf555706d2cb978d2f0e3296ea82413734fba9a856c66c5f2b17` | 471 KB | `Detect` with `Detector: blazeface` | approved |
+| `sface_2021dec` | `face/face_recognition_sface_2021dec.onnx` | `0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79` | 39 MB | `Embed`, with `EnableEmbedding` | **dev-only** |
+| `mivolo_v2_age` | `age/mivolo_v2_age.onnx` | `2db5e05be33b3f120518a86f29a4a65eb0a01c2967219b8787a7dead9b796951` | 118 MB | `EstimateAge`, with `EnableAge` | **dev-only** |
 
-- **YuNet**: MIT. Trained on WIDER FACE, which is CC BY-NC-ND 4.0; whether that
-  term reaches the weights is unsettled and recorded as a risk.
-- **BlazeFace short range**: Google's model, Apache-2.0, exported to ONNX by
-  yakhyo/mediapipe-face-mesh-onnx. The release tag is mutable; the digest,
-  which equals the release asset's published digest, is what pins it.
-- **SFace**: Apache-2.0 as opencv_zoo distributes it, but the upstream weights
-  carry no licence and the training data is undocumented: commercial use is
-  unknown, so it is `dev-only`.
-- **MiVOLO v2 age**: Apache-2.0, a third-party export of iitolstykh/mivolo_v2
-  trained partly on proprietary data: `dev-only`.
+| id | source (pinned) | code licence | model licence | training data | commercial use |
+| --- | --- | --- | --- | --- | --- |
+| `yunet_2026may` | opencv_zoo, commit [`26cc381e4d25`](https://github.com/opencv/opencv_zoo/tree/26cc381e4d2594bb9f47a26eb8fd96c94a13660d/models/face_detection_yunet) | MIT | MIT | WIDER FACE, distributed under CC BY-NC-ND 4.0. Whether that non-commercial term reaches the weights is unsettled: a recorded risk | yes, by the weights' licence; see the risk |
+| `blazeface_short_range` | Google MediaPipe, exported to ONNX by [yakhyo/mediapipe-face-mesh-onnx](https://github.com/yakhyo/mediapipe-face-mesh-onnx/releases/tag/weights), release `weights` | Apache-2.0 | Apache-2.0 | described by Google's BlazeFace model card | yes |
+| `sface_2021dec` | opencv_zoo, commit [`ba91a3b91d00`](https://github.com/opencv/opencv_zoo/tree/ba91a3b91d00d76e86540d4013f944bd6b514e39/models/face_recognition_sface) | Apache-2.0 | Apache-2.0 as opencv_zoo distributes it; the upstream weights carry no licence | undocumented | **unknown** |
+| `mivolo_v2_age` | iitolstykh/mivolo_v2, age output exported by [Sam-Apostel/mivolo-v2-age-onnx](https://huggingface.co/Sam-Apostel/mivolo-v2-age-onnx/tree/8eb4cd8f5dd4bd28df2c9a43b24bc54d6d139d36), revision `8eb4cd8f5dd4` | Apache-2.0 | Apache-2.0 | partly proprietary, as the authors describe it; a third-party export | licence permits it; kept **dev-only** pending review |
 
-No model here infers race, ethnicity or gender, and no non-commercial
-recognizer (InsightFace, ArcFace) is shipped; a test refuses them.
+The BlazeFace release tag is mutable; the digest, which equals the release
+asset's published digest, is what pins the file. Full source URLs are in the
+manifests and in [THIRD_PARTY_MODELS.md](THIRD_PARTY_MODELS.md).
 
-A models directory holds each file at the path its manifest's `file` says
-(`face/face_detection_yunet_2026may.onnx`, `age/mivolo_v2_age.onnx`, …).
-`cmd/face-models` fills one:
+### `dev-only` and `RefuseDevOnly`
+
+A `dev-only` model loads, and every `ModelInfo` it produces says
+`Status: "dev-only"`, so the evidence the application records shows the signal
+came from a model not cleared for production. With `Config.RefuseDevOnly` set —
+the production switch — `Boot` refuses a configuration that needs a dev-only
+model (SFace through `EnableEmbedding`, MiVOLO through `EnableAge`) before any
+file is read, with `ErrDevOnlyRefused` naming the model. Detection with YuNet or
+BlazeFace, alignment and quality need no dev-only model.
+
+### Download and verify
 
 ```bash
-go run github.com/hyz-is/arandu-face/cmd/face-models -dir /srv/models
-go run github.com/hyz-is/arandu-face/cmd/face-models -dir /srv/models -check
+go run github.com/hyz-is/arandu-face/cmd/face-models@v0.1.0 -dir /srv/models
+go run github.com/hyz-is/arandu-face/cmd/face-models@v0.1.0 -dir /srv/models -check
+go run github.com/hyz-is/arandu-face/cmd/face-models@v0.1.0 -dir /srv/models -only yunet_2026may
 ```
 
-It downloads each file over HTTPS from the source its manifest records,
-follows only HTTPS redirects, hashes while it writes, and keeps the file only
-when the digest matches. `-only` takes a comma-separated list of ids; `-check`
-verifies what is there and connects to nothing. **The command is the only code
-here that opens a network connection.** The library an application links reads
-files from the directory it is given, which is why `arandu.mod.toml` declares
-`network = false`.
-
-## Wire it
-
-An Arandu application registers a module explicitly. There is no service
-provider, no container and no discovery, so these are the lines to paste into
-`bootstrap/app.go` and there are no others.
-
-The imports, with the other module imports:
-
-```go
-import (
-	onnx "github.com/hyz-is/arandu-onnx"
-	face "github.com/hyz-is/arandu-face"
-)
-```
-
-The construction, in `Build`, before `k.Register`, after the ONNX module. Every
-value comes from the application's own typed configuration; this package reads
-no environment variable:
-
-```go
-	faceModule, err := face.New(face.Config{
-		ModelsDir:       cfg.Face.ModelsDir,
-		Detector:        face.DetectorYuNet,
-		EnableEmbedding: cfg.Face.Embedding,
-		EnableAge:       cfg.Face.Age,
-		RefuseDevOnly:   cfg.Face.Production,
-	}, onnxModule.Runtime())
-	if err != nil {
-		return App{}, err
-	}
-```
-
-And the registration, inside the `k.Register(...)` call already there, after
-`onnxModule`:
-
-```go
-		onnxModule,
-		faceModule,
-```
-
-`Boot` initializes the runtime if `arandu-onnx` has not yet, and opens the
-configured models, verifying each; a missing or altered file stops the boot,
-naming the model. With `RefuseDevOnly` set, a configuration that needs a
-dev-only model (SFace, MiVOLO) stops the boot before any file is read, with
-`ErrDevOnlyRefused`. `Health` reports whether the models are open and the
-runtime under them is usable. `Models` lists the `ModelInfo` of each open
-model. `Close` closes the sessions. Registering it adds no route, no table and
-no background loop.
-
-## Measure a face
-
-```go
-img, err := onnx.DecodeImage(upload) // JPEG or PNG, turned upright by EXIF
-
-faces, err := faceModule.Detect(ctx, img)       // stage 1: boxes, landmarks, detector ModelInfo
-aligned, err := face.Align(img, faces[0].Landmarks) // stage 2: 112×112 crop and transform
-report, err := faceModule.Quality(img, faces[0])     // stage 3: signals and per-signal checks
-probe, err := faceModule.Embed(ctx, aligned.Image)   // stage 4: unit vector, SFace ModelInfo
-cmp, err := faceModule.Compare(probe, reference)     // stage 5: cosine, L2, ThresholdSet
-age, err := faceModule.EstimateAge(ctx, img, faces[0], nil) // stage 6: years, MiVOLO ModelInfo
-```
-
-Every model-backed result carries an `onnx.ModelInfo` — ID, Version, SHA256,
-Runtime, Precision, Provider and Status — which is what the application
-records as evidence beside the signal. A `dev-only` status in that record says
-the signal came from a model not cleared for production.
-
-Every `Face` is in the coordinates of the image as given, including a
-sub-image's offset. Its `Parameters` record the score threshold, NMS
-threshold, top-k, the input size the detector read and the scale applied.
-
-The pure-Go pieces are exported for reuse and testing: `DecodeYuNet`,
-`YuNetPaddedSize`, `BlazeFaceAnchors`, `DecodeBlazeFace`, `NMS`, `WeightedNMS`,
-`IoU`, `DecomposeSVD2`, `EstimateSimilarity`, `WarpAffine`, `LaplacianVariance`,
-`L2Normalize` and `RawPlanes`.
-
-## Configuration
-
-| Field | Default | What it does |
-| --- | --- | --- |
-| `ModelsDir` | required | The directory the model files are in |
-| `Detector` | `yunet` | `yunet` or `blazeface` (selfies) |
-| `EnableEmbedding` | `false` | Open SFace at Boot, for Embed |
-| `EnableAge` | `false` | Open MiVOLO at Boot, for EstimateAge |
-| `RefuseDevOnly` | `false` | Refuse every configured dev-only model at Boot — the production switch |
-| `DetectMaxSide` | `640` | Longest side YuNet sees, 32 to 4096 |
-| `ScoreThreshold` | `0.9` YuNet, `0.5` BlazeFace | Score a detection needs to be kept |
-| `NMSThreshold` | `0.3` | IoU above which a detection is suppressed |
-| `TopK` | `5000` | Candidates YuNet's suppression considers |
-| `Thresholds` | `SFaceReferenceThresholds()` | The reference values Compare returns |
-| `Quality` | `DefaultQualityThresholds()` | The bounds Quality checks against |
-
-A numeric field left at zero, and a threshold set left without a version,
-takes its default.
+A models directory holds each file at the path its manifest's `file` says
+(`face/face_detection_yunet_2026may.onnx`, `age/mivolo_v2_age.onnx`, …). The
+command downloads each file over HTTPS from the source its manifest records,
+follows only HTTPS redirects, hashes while it writes, and renames the file into
+place only when the digest matches. A file already present with the right
+digest is left alone. `-check` verifies what is there, connects to nothing, and
+exits non-zero when a file is missing or altered. **The command is the only
+code in this repository that opens a network connection**, and an application
+never links it, which is why `arandu.mod.toml` declares `network = false`.
 
 ## What was measured, and what was not
 
@@ -270,16 +288,28 @@ dataset is used.
 - Concurrent calls from eight goroutines give the same answers as sequential
   ones, under the race detector.
 
-On an Apple M4 Max, CPU provider, ONNX Runtime 1.30.0, on the 480×560 cartoon
-(`go test -run '^$' -bench . ./tests/Feature/`): Detect with YuNet ≈ 3.6 ms,
-with BlazeFace ≈ 1.0 ms; Align ≈ 0.4 ms; Quality ≈ 1.9 ms; Embed ≈ 7.4 ms;
-EstimateAge ≈ 440 ms.
+Speed on the 480×560 cartoon, CPU provider, ONNX Runtime 1.30.0, on an Apple
+M4 Max (`go test -run '^$' -bench . ./tests/Feature/`), over several runs:
+
+| call | per image |
+| --- | --- |
+| `Detect`, YuNet | about 3.5–5 ms |
+| `Detect`, BlazeFace | about 0.6–1 ms |
+| `Align` | about 0.1–0.4 ms |
+| `Quality` | about 0.6–1.9 ms |
+| `Embed` | about 3.5–7.5 ms |
+| `EstimateAge` | about 200–440 ms |
+
+These figures are indicative: one machine, synthetic images, no accelerator.
 
 **Detection accuracy, the false-match and false-non-match rates of the
 embedding, the calibration of any threshold, the error of the age estimate
 and any difference between demographic groups have not been measured.** They
-must be measured by the owner on consented data before any of these signals
-weighs on a decision.
+must be measured by the owner on consented, representative data before any of
+these signals weighs on a decision. `SFaceReferenceThresholds()` and
+`DefaultQualityThresholds()` are starting values, versioned as such
+(`sface-opencv-2021dec`, `arandu-face-quality-0.1-uncalibrated`), and are not
+calibrated on any population.
 
 ## Concurrency
 
@@ -288,16 +318,7 @@ the ONNX Runtime sessions, whose runs are thread-safe; the module's
 reader-writer lock lets them proceed together and makes `Close` wait for
 them. `Align`, `Quality` and `Compare` are pure functions.
 
-## Why there is no table, policy or route
-
-This repository has the shape of the Arandu package skeleton without its demo
-entity, like `arandu-onnx`. It wraps a technology and owns no record, so there
-is nothing for a policy to decide about; a route would measure any face for
-anybody who sent one. Faces are measured through the application's
-controllers and Grants, and biometric data is the application's to minimize,
-encrypt and audit.
-
-## Limitations
+## Limitations, and what needs evaluation
 
 - YuNet sees at most `DetectMaxSide` pixels on the longer side; a small face on
   a large photograph may need a crop or a larger limit.
@@ -310,25 +331,82 @@ encrypt and audit.
 - SFace and MiVOLO are dev-only: their licences or training data are not
   settled for commercial use.
 - Every figure above is on synthetic images.
+- Nothing here has been evaluated on photographs of real people. Detection
+  rate, embedding error rates, age error and their variation across age, skin
+  tone, sex, capture device and lighting need a consented, representative
+  evaluation before use.
 
-## Gates
+## Security and privacy
 
-```sh
+Face images and the embeddings derived from them are biometric data, which
+LGPD, GDPR and similar laws treat as sensitive personal data. This package
+holds none of it beyond the call that measures it: it does not store, log or
+transmit an image, an embedding or a result. Collecting only what is needed,
+encrypting the raw image apart from the normalized facts, controlling and
+auditing every access, obtaining a lawful basis or consent, and deleting on
+schedule are the application's responsibility.
+
+An embedding is a biometric template: treat it like the image it came from.
+Comparisons across models, versions or files are refused (`ErrModelMismatch`),
+so a template is never silently compared with one it cannot be compared with.
+
+`DecodeImage` bounds the pixel count before decoding, and every model file is
+verified against its digest before the native runtime parses it. Report
+vulnerabilities privately; see [SECURITY.md](SECURITY.md).
+
+## Why there is no table, policy or route
+
+This repository has the shape of the Arandu package skeleton without its demo
+entity, like `arandu-onnx`. It wraps a technology and owns no record, so there
+is nothing for a policy to decide about; a route would measure any face for
+anybody who sent one. Faces are measured through the application's
+controllers and Grants, and biometric data is the application's to minimize,
+encrypt and audit.
+
+## Tests
+
+```bash
 export GOWORK=off CGO_ENABLED=1
-gofmt -l $(find . -name '*.go' -not -path '*/testdata/*' -not -name '*.kyse.go')
+test -z "$(gofmt -l $(find . -name '*.go' -not -path '*/testdata/*' -not -name '*.kyse.go'))"
 go build ./...
 go vet ./...
-go test -race ./...
+go test -race -count=1 ./...
 ```
 
-The model tests read the models from `FACE_MODELS_DIR`, or from the KUAA
-workspace's `models/` two levels above this checkout, and skip, saying where
-they looked, when the files are not there; they skip too when ONNX Runtime is
-absent. A skip is a reason to fetch the models, not a green result. No test
-downloads anything.
+The model tests read the models from the directory `FACE_MODELS_DIR` names, or
+from `../../models` when it is unset, and skip, saying where they looked, when
+the files are not there; they skip too when ONNX Runtime is absent. No test
+downloads anything. To run them:
+
+```bash
+go run ./cmd/face-models -dir /tmp/face-models
+FACE_MODELS_DIR=/tmp/face-models go test -race -count=1 ./...
+```
+
+CI installs ONNX Runtime 1.30.0, fetches and verifies the four models with the
+same command, and runs the suite with nothing skipped. Every image the tests
+read is drawn in Go; no photograph of a person is read or committed.
+
+## Versioning and releases
+
+The module follows [Semantic Versioning](https://semver.org/). While the major
+version is `v0`, a minor release may break the API, and every break is named in
+[UPGRADE.md](UPGRADE.md); CI compares the exported API with the last tag. A new
+model, a new model revision, a changed default threshold or a changed threshold
+version changes what every installer records as evidence, and is always a
+changelog line.
+
+A release is a tag `vX.Y.Z` on `main` whose notes are the `## [X.Y.Z] - date`
+entry already committed in [CHANGELOG.md](CHANGELOG.md). The release workflow
+refuses a `go.mod` that still replaces a module with a local path, re-runs the
+gates on the exact tag archive with the models fetched, audits known
+vulnerabilities, and publishes those notes. A published version is immutable.
 
 ## Licence
 
-MIT. See [LICENSE.md](LICENSE.md). The model files, which this repository does
-not contain, are under their own licences, listed above and in their
-manifests.
+The code is MIT; see [LICENSE.md](LICENSE.md). Copyright HYZIS - Serviços
+Digitais Ltda.
+
+The model weights are not part of this repository; each is under its own
+licence, listed in [THIRD_PARTY_MODELS.md](THIRD_PARTY_MODELS.md). The
+algorithmic constants this code follows are attributed in [NOTICE](NOTICE).

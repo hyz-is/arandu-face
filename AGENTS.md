@@ -13,9 +13,11 @@ line of wiring is not written in the installer's repository, it does not happen.
 Read `.agents/skills/` before writing code. Each skill is a procedure, and the
 one you need is named by the situation you are in.
 
-## The KUAA rules
+## The rules
 
-These come from the project, not from taste. A change that breaks one is not
+These come from the engines' design, not from taste. They were written for
+KUAA, the identity-verification application these engines were built for, and
+they hold for every installer. A change that breaks one is not
 merged.
 
 1. **Signals, never decisions.** Every stage is its own exported call with its
@@ -91,6 +93,8 @@ embed.go      Embed, Compare, ThresholdSet
 age.go        EstimateAge
 manifests/    one manifest per model
 cmd/face-models/  downloads and verifies the model files
+NOTICE             the published constants the stages follow, attributed
+THIRD_PARTY_MODELS.md  the source, digest, licences and status of every model
 ```
 
 Tests live under `tests/Unit` (decoding, suppression, alignment, quality,

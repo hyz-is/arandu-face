@@ -1,0 +1,39 @@
+Arandu Face
+Copyright (c) HYZIS - SERVICOS DIGITAIS LTDA - EPP
+
+The source code of this repository is licensed under the MIT License; see
+LICENSE.md. It contains no third-party source file and no model weights.
+
+-------------------------------------------------------------------------------
+Algorithms and constants followed
+
+The Go implementation is this repository's own. To produce the same signals as
+the reference implementations of the models it runs, it follows their
+published pre- and post-processing parameters:
+
+- YuNet decoding, score combination and NMS parameters, as in OpenCV's
+  FaceDetectorYN (https://github.com/opencv/opencv, Apache License 2.0) and the
+  opencv_zoo YuNet model (https://github.com/opencv/opencv_zoo, MIT).
+- SFace input conventions and the reference thresholds returned by
+  SFaceReferenceThresholds (cosine 0.363, L2 1.128), as published with
+  OpenCV's FaceRecognizerSF and opencv_zoo (Apache License 2.0).
+- BlazeFace short-range SSD anchor generation, decoding and weighted NMS
+  parameters, as in Google MediaPipe's face detection graph
+  (https://github.com/google-ai-edge/mediapipe, Apache License 2.0).
+- The five-point 112x112 alignment template (ArcFaceTemplate), as published by
+  the InsightFace project (https://github.com/deepinsight/insightface, code
+  under the MIT License). Only the five coordinates are used; no InsightFace
+  model or code is included.
+- The least-squares similarity estimate of S. Umeyama, "Least-squares
+  estimation of transformation parameters between two point patterns", IEEE
+  TPAMI 13(4), 1991.
+- MiVOLO input preprocessing, as described by the MiVOLO authors
+  for iitolstykh/mivolo_v2 (Apache License 2.0).
+
+-------------------------------------------------------------------------------
+Model weights
+
+The ONNX model files are NOT part of this repository and are not distributed
+with it. cmd/face-models downloads them from their upstream sources. Each is
+under its own licence, and two of them are marked dev-only; see
+THIRD_PARTY_MODELS.md.
