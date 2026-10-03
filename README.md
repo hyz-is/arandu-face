@@ -65,7 +65,7 @@ verdict.
    BT.601 luma), brightness (mean luma) and contrast (its standard deviation).
    Every signal is checked against `QualityThresholds` and reported as a
    `QualityCheck{Signal, Value, Rule, Pass}`. The default thresholds are
-   versioned `kuaa-face-quality-0.1-uncalibrated`: starting values, not
+   versioned `arandu-face-quality-0.1-uncalibrated`: starting values, not
    calibrated on any population. There is no overall pass.
 5. **Embedding.** The aligned crop goes to SFace as RGB 0..255 (SFace
    normalizes inside its graph); `fc1` [1, 128] is divided by its norm.

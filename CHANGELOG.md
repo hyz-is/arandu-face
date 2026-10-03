@@ -25,7 +25,7 @@ a release is corrected by another release and never by moving a tag.
 - `Quality` and `Module.Quality`: pure-Go signals (size, frame share,
   inter-ocular distance, roll, yaw proxy, landmarks in box, sharpness,
   brightness, contrast) with per-signal checks against versioned
-  `QualityThresholds` (`kuaa-face-quality-0.1-uncalibrated`).
+  `QualityThresholds` (`arandu-face-quality-0.1-uncalibrated`).
 - `Module.Embed`: L2-normalized SFace 2021dec embeddings (dev-only).
 - `Compare` and `Module.Compare`: cosine and L2 between embeddings of one
   model, with the versioned `ThresholdSet` (`sface-opencv-2021dec`) beside

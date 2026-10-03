@@ -39,7 +39,7 @@ type QualityThresholds struct {
 // population; their version says so.
 func DefaultQualityThresholds() QualityThresholds {
 	return QualityThresholds{
-		Version:          "kuaa-face-quality-0.1-uncalibrated",
+		Version:          "arandu-face-quality-0.1-uncalibrated",
 		MinFaceSidePx:    80,
 		MinFaceAreaRatio: 0.02,
 		MinInterOcularPx: 40,
