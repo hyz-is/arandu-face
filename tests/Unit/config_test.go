@@ -26,6 +26,7 @@ func TestConfigValidateRefusesWhatCannotWork(t *testing.T) {
 		"score above one":    {func(c *face.Config) { c.ScoreThreshold = 1.1 }, "ScoreThreshold"},
 		"nms negative":       {func(c *face.Config) { c.NMSThreshold = -0.1 }, "NMSThreshold"},
 		"nms NaN":            {func(c *face.Config) { c.NMSThreshold = math.NaN() }, "NMSThreshold"},
+		"unknown age model":  {func(c *face.Config) { c.AgeModel = "mivolo_v1" }, "AgeModel"},
 		"negative top k":     {func(c *face.Config) { c.TopK = -1 }, "TopK"},
 		"thresholds without a model": {func(c *face.Config) {
 			c.Thresholds = face.ThresholdSet{Version: "x", CosineReference: 0.5, L2Reference: 1}

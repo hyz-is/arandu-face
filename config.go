@@ -29,6 +29,9 @@ const (
 	DefaultNMSThreshold = 0.3
 	// DefaultTopK is how many candidates suppression considers.
 	DefaultTopK = 5000
+	// DefaultAgeModel is the age model EnableAge opens when Config.AgeModel
+	// is empty.
+	DefaultAgeModel = ModelMiVOLOAgeConvTranspose
 )
 
 // Config is what the application passes when it wires this package.
@@ -48,6 +51,11 @@ type Config struct {
 	EnableEmbedding bool
 	// EnableAge opens MiVOLO at Boot, which EstimateAge needs.
 	EnableAge bool
+	// AgeModel is the manifest id of the MiVOLO file EnableAge opens:
+	// ModelMiVOLOAgeConvTranspose (the default), whose graph an accelerator
+	// runs whole, or ModelMiVOLOAge, the file as its export was published.
+	// Both carry the same weights and give the same estimates.
+	AgeModel string
 	// RefuseDevOnly makes Boot refuse every configured model whose manifest
 	// is dev-only, before reading any file: the production switch.
 	RefuseDevOnly bool
@@ -85,6 +93,11 @@ func (c Config) Validate() error {
 	default:
 		return fmt.Errorf("face: Config.Detector is %q, and has to be %q or %q", c.Detector, DetectorYuNet, DetectorBlazeFace)
 	}
+	switch c.AgeModel {
+	case "", ModelMiVOLOAge, ModelMiVOLOAgeConvTranspose:
+	default:
+		return fmt.Errorf("face: Config.AgeModel is %q, and has to be %q or %q", c.AgeModel, ModelMiVOLOAgeConvTranspose, ModelMiVOLOAge)
+	}
 	if c.DetectMaxSide != 0 && (c.DetectMaxSide < 32 || c.DetectMaxSide > 4096) {
 		return fmt.Errorf("face: Config.DetectMaxSide is %d, and has to be between 32 and 4096, or 0 for %d", c.DetectMaxSide, DefaultDetectMaxSide)
 	}
@@ -120,6 +133,9 @@ func (c Config) Validate() error {
 func (c Config) WithDefaults() Config {
 	if c.Detector == "" {
 		c.Detector = DetectorYuNet
+	}
+	if c.AgeModel == "" {
+		c.AgeModel = DefaultAgeModel
 	}
 	if c.DetectMaxSide == 0 {
 		c.DetectMaxSide = DefaultDetectMaxSide

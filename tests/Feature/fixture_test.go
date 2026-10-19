@@ -31,11 +31,11 @@ func modelsDir(t testing.TB) string {
 	if dir == "" {
 		dir = filepath.Join(packageRoot(t), "..", "..", "models")
 	}
-	for _, id := range []string{face.ModelYuNet, face.ModelBlazeFace, face.ModelSFace, face.ModelMiVOLOAge} {
-		manifest, err := face.LookupManifest(id)
-		if err != nil {
-			t.Fatalf("looking up the manifest of %s: %v", id, err)
-		}
+	manifests, err := face.Manifests()
+	if err != nil {
+		t.Fatalf("listing the manifests: %v", err)
+	}
+	for _, manifest := range manifests {
 		if _, err := os.Stat(filepath.Join(dir, manifest.File)); err != nil {
 			t.Skipf("the face models are not in %s (set FACE_MODELS_DIR, or fill it with go run ./cmd/face-models -dir %s): %v", dir, dir, err)
 		}

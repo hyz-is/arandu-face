@@ -74,35 +74,47 @@ func TestNewRefusesWhatCannotWork(t *testing.T) {
 	}
 }
 
-// TestRefuseDevOnlyStopsTheBootBeforeAnyFileIsRead is the production switch:
-// with it set, a configuration that needs a dev-only model does not boot, and
-// it says which model. It needs neither ONNX Runtime nor the files, because
-// the refusal comes first.
-func TestRefuseDevOnlyStopsTheBootBeforeAnyFileIsRead(t *testing.T) {
+// TestRefuseDevOnlyPassesEveryShippedConfiguration is the production switch
+// with nothing left to refuse: every shipped manifest is approved, so no
+// configuration stops at the dev-only check. On an empty directory the boot
+// goes on to the files, and fails there or at the runtime instead. It needs
+// neither ONNX Runtime nor the files, because the check comes first.
+//
+// A model added as dev-only is refused again with ErrDevOnlyRefused; the
+// switch stays for it.
+func TestRefuseDevOnlyPassesEveryShippedConfiguration(t *testing.T) {
 	t.Parallel()
 
+	manifests, err := face.Manifests()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range manifests {
+		if m.Status == onnx.StatusDevOnly {
+			t.Errorf("%s is dev-only: extend this test with the configuration that needs it, refused", m.ID)
+		}
+	}
 	ctx := context.Background()
-	for _, tc := range []struct {
-		cfg   face.Config
-		model string
-	}{
-		{face.Config{EnableEmbedding: true}, face.ModelSFace},
-		{face.Config{EnableAge: true}, face.ModelMiVOLOAge},
+	for _, cfg := range []face.Config{
+		{EnableEmbedding: true},
+		{EnableAge: true},
+		{EnableAge: true, AgeModel: face.ModelMiVOLOAge},
+		{Detector: face.DetectorBlazeFace, EnableEmbedding: true, EnableAge: true},
 	} {
-		tc.cfg.ModelsDir = t.TempDir()
-		tc.cfg.RefuseDevOnly = true
-		m := unbootedModule(t, tc.cfg)
+		cfg.ModelsDir = t.TempDir()
+		cfg.RefuseDevOnly = true
+		m := unbootedModule(t, cfg)
 		err := m.Boot(ctx)
-		if !errors.Is(err, face.ErrDevOnlyRefused) || !strings.Contains(err.Error(), tc.model) {
-			t.Errorf("Boot with %s and RefuseDevOnly = %v, want ErrDevOnlyRefused naming it", tc.model, err)
+		if err == nil || errors.Is(err, face.ErrDevOnlyRefused) {
+			t.Errorf("Boot of %+v on an empty directory = %v, want a missing file or runtime, not a dev-only refusal", cfg, err)
 		}
 		if err := m.Health(ctx); !errors.Is(err, face.ErrNotBooted) {
-			t.Errorf("Health after the refusal = %v, want ErrNotBooted", err)
+			t.Errorf("Health after the failed boot = %v, want ErrNotBooted", err)
 		}
 	}
 }
 
-func TestRefuseDevOnlyBootsTheApprovedDetectors(t *testing.T) {
+func TestRefuseDevOnlyBootsEveryModel(t *testing.T) {
 	for _, detector := range []string{face.DetectorYuNet, face.DetectorBlazeFace} {
 		m := bootModule(t, face.Config{Detector: detector, RefuseDevOnly: true})
 		models := m.Models()
@@ -114,6 +126,18 @@ func TestRefuseDevOnlyBootsTheApprovedDetectors(t *testing.T) {
 		}
 		if _, err := m.EstimateAge(context.Background(), image.NewRGBA(image.Rect(0, 0, 10, 10)), face.Face{}, nil); !errors.Is(err, face.ErrNotEnabled) {
 			t.Errorf("EstimateAge without EnableAge = %v, want ErrNotEnabled", err)
+		}
+	}
+	for _, age := range []string{face.ModelMiVOLOAgeConvTranspose, face.ModelMiVOLOAge} {
+		m := bootModule(t, face.Config{EnableEmbedding: true, EnableAge: true, AgeModel: age, RefuseDevOnly: true})
+		models := m.Models()
+		if len(models) != 3 || models[2].ID != age {
+			t.Fatalf("RefuseDevOnly with every stage and %s opened %+v", age, models)
+		}
+		for _, info := range models {
+			if info.Status != onnx.StatusApproved {
+				t.Errorf("%s opened with status %s", info.ID, info.Status)
+			}
 		}
 	}
 }

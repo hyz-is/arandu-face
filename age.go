@@ -47,7 +47,7 @@ const mivoloReportedMAE = 3.65
 // 384×384 black; so is the body box when one is given, and an all-black image
 // stands in for it otherwise. Both are normalized as RGB/255 with ImageNet
 // mean and standard deviation and stacked as six channels. It needs
-// Config.EnableAge.
+// Config.EnableAge, and runs the MiVOLO file Config.AgeModel names.
 func (m *Module) EstimateAge(ctx context.Context, img image.Image, face Face, body *Box) (AgeEstimate, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()

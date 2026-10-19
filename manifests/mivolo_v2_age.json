@@ -7,9 +7,9 @@
   "license": "Apache-2.0",
   "model_license": "Apache-2.0",
   "commercial_use": "yes",
-  "redistribution": "allowed under Apache-2.0, with its licence and notice; a third-party export of iitolstykh/mivolo_v2 trained partly on proprietary data",
+  "redistribution": "allowed under Apache-2.0, with its licence and notice; a third-party export of iitolstykh/mivolo_v2 trained partly on proprietary data, a risk the maintainer accepted, see ModelCard",
   "modification": "allowed under Apache-2.0",
-  "status": "dev-only",
+  "status": "approved",
   "inputs": [{"name": "faces_bodies", "element_type": "float32", "shape": [1, 6, 384, 384]}],
   "outputs": [{"name": "age", "element_type": "float32", "shape": [1, 1]}],
   "precision": "fp32"

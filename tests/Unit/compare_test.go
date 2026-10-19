@@ -9,7 +9,7 @@ import (
 	onnx "github.com/hyz-is/arandu-onnx"
 )
 
-var sface = onnx.ModelInfo{ID: face.ModelSFace, Version: "2021dec-ba91a3b91d00", SHA256: "0ba9fbfa", Status: onnx.StatusDevOnly}
+var sface = onnx.ModelInfo{ID: face.ModelSFace, Version: "2021dec-ba91a3b91d00", SHA256: "0ba9fbfa", Status: onnx.StatusApproved}
 
 func embedding(model onnx.ModelInfo, v ...float32) face.Embedding {
 	return face.Embedding{Vector: v, Dim: len(v), Model: model, Normalization: face.NormalizationL2}

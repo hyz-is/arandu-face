@@ -1,0 +1,16 @@
+{
+  "id": "mivolo_v2_age_convt",
+  "version": "v2-8eb4cd8f5dd4-convt",
+  "file": "age/mivolo_v2_age_convt.onnx",
+  "sha256": "cd7826cff39be95bbcbf8e7855a9971137cd0fb5bea8b536e2efee3e201e8333",
+  "source_url": "https://huggingface.co/Sam-Apostel/mivolo-v2-age-onnx/resolve/8eb4cd8f5dd4bd28df2c9a43b24bc54d6d139d36/mivolo_v2_age.onnx",
+  "license": "Apache-2.0",
+  "model_license": "Apache-2.0",
+  "commercial_use": "yes",
+  "redistribution": "allowed under Apache-2.0, with its licence and notice; derived from mivolo_v2_age (sha256 2db5e05be33b3f120518a86f29a4a65eb0a01c2967219b8787a7dead9b796951) by rewriting its four Col2Im nodes with github.com/hyz-is/arandu-onnx v0.3.0, a modification Apache-2.0 allows and the model card records",
+  "modification": "allowed under Apache-2.0; this file is a modified graph with the same weights, see ModelCard.Derivation",
+  "status": "approved",
+  "inputs": [{"name": "faces_bodies", "element_type": "float32", "shape": [1, 6, 384, 384]}],
+  "outputs": [{"name": "age", "element_type": "float32", "shape": [1, 1]}],
+  "precision": "fp32"
+}

@@ -27,9 +27,11 @@ func TestEveryShippedManifestRecordsItsProvenance(t *testing.T) {
 	expected := map[string]want{
 		face.ModelBlazeFace: {onnx.StatusApproved, onnx.CommercialUseYes, "face/face_detection_short_range.onnx",
 			[]string{"input"}, []string{"regressors", "scores"}},
-		face.ModelMiVOLOAge: {onnx.StatusDevOnly, onnx.CommercialUseYes, "age/mivolo_v2_age.onnx",
+		face.ModelMiVOLOAge: {onnx.StatusApproved, onnx.CommercialUseYes, "age/mivolo_v2_age.onnx",
 			[]string{"faces_bodies"}, []string{"age"}},
-		face.ModelSFace: {onnx.StatusDevOnly, onnx.CommercialUseUnknown, "face/face_recognition_sface_2021dec.onnx",
+		face.ModelMiVOLOAgeConvTranspose: {onnx.StatusApproved, onnx.CommercialUseYes, "age/mivolo_v2_age_convt.onnx",
+			[]string{"faces_bodies"}, []string{"age"}},
+		face.ModelSFace: {onnx.StatusApproved, onnx.CommercialUseYes, "face/face_recognition_sface_2021dec.onnx",
 			[]string{"data"}, []string{"fc1"}},
 		face.ModelYuNet: {onnx.StatusApproved, onnx.CommercialUseYes, "face/face_detection_yunet_2026may.onnx",
 			[]string{"input"}, face.YuNetOutputNames()},
@@ -76,6 +78,9 @@ func TestTheManifestsRecordTheReviewedDigests(t *testing.T) {
 		face.ModelBlazeFace: "2f2689b040becf555706d2cb978d2f0e3296ea82413734fba9a856c66c5f2b17",
 		face.ModelSFace:     "0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79",
 		face.ModelMiVOLOAge: "2db5e05be33b3f120518a86f29a4a65eb0a01c2967219b8787a7dead9b796951",
+		// The rewritten graph has no upstream digest: this is the SHA-256 of
+		// the file the rewrite produced, which cmd/face-models reproduces.
+		face.ModelMiVOLOAgeConvTranspose: "cd7826cff39be95bbcbf8e7855a9971137cd0fb5bea8b536e2efee3e201e8333",
 	} {
 		m, err := face.LookupManifest(id)
 		if err != nil {
@@ -94,7 +99,7 @@ func TestTheSourcesArePinnedToARevision(t *testing.T) {
 	t.Parallel()
 
 	pinned := regexp.MustCompile(`/[0-9a-f]{40}/`)
-	for _, id := range []string{face.ModelYuNet, face.ModelSFace, face.ModelMiVOLOAge} {
+	for _, id := range []string{face.ModelYuNet, face.ModelSFace, face.ModelMiVOLOAge, face.ModelMiVOLOAgeConvTranspose} {
 		m, err := face.LookupManifest(id)
 		if err != nil {
 			t.Fatal(err)
@@ -158,5 +163,88 @@ func TestTheModelCardsRecordWhatTheManifestCannot(t *testing.T) {
 	}
 	if _, err := face.LookupModelCard("fairface"); err == nil {
 		t.Error("a card for an unshipped model was found")
+	}
+}
+
+// TestOnlyCommercialModelsAreApproved holds the licence rule the statuses
+// follow: a model is approved only when its weights' licence allows
+// commercial use, and its card says who approved it and what was accepted.
+func TestOnlyCommercialModelsAreApproved(t *testing.T) {
+	t.Parallel()
+
+	manifests, err := face.Manifests()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range manifests {
+		if m.Status != onnx.StatusApproved {
+			continue
+		}
+		if m.CommercialUse != onnx.CommercialUseYes {
+			t.Errorf("%s is approved with commercial_use %q", m.ID, m.CommercialUse)
+		}
+		card, err := face.LookupModelCard(m.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.TrimSpace(card.Review) == "" {
+			t.Errorf("%s is approved and its card records no review", m.ID)
+		}
+		if strings.Contains(strings.ToLower(card.TrainingData+card.Review), "dev-only") {
+			t.Errorf("%s is approved and its card still calls it dev-only", m.ID)
+		}
+	}
+	for _, id := range []string{face.ModelSFace, face.ModelMiVOLOAge, face.ModelMiVOLOAgeConvTranspose} {
+		card, err := face.LookupModelCard(id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(card.Review, "ADR-0010") || !strings.Contains(card.Review, "accepted") {
+			t.Errorf("%s: the review does not name the decision and the accepted risk: %q", id, card.Review)
+		}
+	}
+}
+
+// TestTheDerivedAgeModelPointsAtItsOriginal holds the record a derived file
+// has instead of an address: the original's id and digest, the rewrite and
+// the tool, and the same source, licences and contract as the original.
+func TestTheDerivedAgeModelPointsAtItsOriginal(t *testing.T) {
+	t.Parallel()
+
+	derived, err := face.LookupManifest(face.ModelMiVOLOAgeConvTranspose)
+	if err != nil {
+		t.Fatal(err)
+	}
+	original, err := face.LookupManifest(face.ModelMiVOLOAge)
+	if err != nil {
+		t.Fatal(err)
+	}
+	card, err := face.LookupModelCard(derived.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := card.Derivation
+	if d == nil {
+		t.Fatalf("%s has no derivation", derived.ID)
+	}
+	if d.From != original.ID || d.FromSHA256 != original.SHA256 || d.Rewrite != face.RewriteCol2ImToConvTranspose ||
+		!strings.Contains(d.Tool, "arandu-onnx v0.3.0") || !strings.Contains(d.Equivalence, "= 0") {
+		t.Errorf("derivation %+v", *d)
+	}
+	if derived.SHA256 == original.SHA256 || derived.File == original.File {
+		t.Errorf("the derived manifest names the original's file or digest: %s %s", derived.File, derived.SHA256)
+	}
+	if derived.SourceURL != original.SourceURL || derived.License != original.License ||
+		derived.ModelLicense != original.ModelLicense || derived.CommercialUse != original.CommercialUse {
+		t.Errorf("the derived manifest's provenance differs from the original's")
+	}
+	if !strings.Contains(derived.Redistribution, original.SHA256) {
+		t.Errorf("the derived manifest's redistribution does not name the original's digest: %q", derived.Redistribution)
+	}
+	if orig, err := face.LookupModelCard(original.ID); err != nil || orig.Derivation != nil {
+		t.Errorf("the original's card = %+v, %v; want one with no derivation", orig, err)
+	}
+	if got := (face.Config{ModelsDir: "m"}).WithDefaults().AgeModel; got != derived.ID {
+		t.Errorf("the default age model is %s, want %s", got, derived.ID)
 	}
 }

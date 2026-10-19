@@ -15,6 +15,11 @@
 // written, and renamed into place only when the digest matches. A file
 // already present with the right digest is left alone. -check verifies what
 // is there without connecting to anything.
+//
+// A model whose card records a Derivation has no address of its own: it is
+// made here from its original, verified first and fetched when missing, by
+// the rewrite the card names, and kept only when its digest is the one its
+// manifest records. The rewrite is pure Go and needs no ONNX Runtime.
 package main
 
 import (
@@ -35,6 +40,8 @@ import (
 
 	face "github.com/hyz-is/arandu-face"
 	onnx "github.com/hyz-is/arandu-onnx"
+	"github.com/hyz-is/arandu-onnx/graph"
+	"github.com/hyz-is/arandu-onnx/rewrite"
 )
 
 // maxModelBytes caps one download. The largest model is under 120 MB.
@@ -80,6 +87,15 @@ func run(ctx context.Context, dir, only string, check bool) error {
 		case check:
 			fmt.Printf("missing  %s %s %s: %v\n", m.ID, m.Version, target, err)
 			failed++
+			continue
+		}
+		if card, err := face.LookupModelCard(m.ID); err == nil && card.Derivation != nil {
+			if err := derive(ctx, client, m, *card.Derivation, dir); err != nil {
+				fmt.Printf("failed   %s %s: %v\n", m.ID, m.Version, err)
+				failed++
+				continue
+			}
+			fmt.Printf("derived  %s %s %s from %s\n", m.ID, m.Version, target, card.Derivation.From)
 			continue
 		}
 		if err := download(ctx, client, m, target); err != nil {
@@ -190,4 +206,88 @@ func download(ctx context.Context, client *http.Client, m onnx.Manifest, target 
 		return err
 	}
 	return os.Rename(partial.Name(), target)
+}
+
+// derive makes a derived model from its original, which it fetches first
+// when the original is not already in place, and renames the result into
+// place only when its digest is the manifest's.
+//
+// The original is read whole and hashed again before it is decoded, so the
+// rewrite only ever runs on the bytes the original's manifest pins.
+func derive(ctx context.Context, client *http.Client, m onnx.Manifest, d face.Derivation, dir string) error {
+	original, err := face.LookupManifest(d.From)
+	if err != nil {
+		return err
+	}
+	if original.SHA256 != d.FromSHA256 {
+		return fmt.Errorf("the model card derives it from %s %s and the manifest of %s records %s", d.From, d.FromSHA256, original.ID, original.SHA256)
+	}
+	source := filepath.Join(dir, original.File)
+	if ok, _ := verify(source, original.SHA256); !ok {
+		if err := download(ctx, client, original, source); err != nil {
+			return fmt.Errorf("fetching the original %s: %w", original.ID, err)
+		}
+		fmt.Printf("fetched  %s %s %s\n", original.ID, original.Version, source)
+	}
+	data, err := os.ReadFile(source)
+	if err != nil {
+		return err
+	}
+	if got := sha256Hex(data); got != original.SHA256 {
+		return fmt.Errorf("the original %s changed while it was read: sha256 %s", source, got)
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	var out []byte
+	switch d.Rewrite {
+	case face.RewriteCol2ImToConvTranspose:
+		model, err := graph.Load(data)
+		if err != nil {
+			return fmt.Errorf("decoding the original %s: %w", original.ID, err)
+		}
+		report, err := rewrite.Col2ImToConvTranspose(model, rewrite.Col2ImOptions{})
+		if err != nil {
+			return fmt.Errorf("rewriting %s: %w", original.ID, err)
+		}
+		if len(report.Rewritten) == 0 {
+			return fmt.Errorf("%s has no Col2Im node to rewrite", original.ID)
+		}
+		if out, err = model.Marshal(); err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("the model card names the rewrite %q, which this command does not know", d.Rewrite)
+	}
+	if got := sha256Hex(out); got != m.SHA256 {
+		return fmt.Errorf("the derived sha256 is %s and the manifest records %s: the file was not kept", got, m.SHA256)
+	}
+
+	target := filepath.Join(dir, m.File)
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		return err
+	}
+	partial, err := os.CreateTemp(filepath.Dir(target), filepath.Base(target)+".*.part")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(partial.Name())
+	_, err = partial.Write(out)
+	if closeErr := partial.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		return err
+	}
+	if err := os.Chmod(partial.Name(), 0o644); err != nil {
+		return err
+	}
+	return os.Rename(partial.Name(), target)
+}
+
+// sha256Hex is the lowercase hexadecimal SHA-256 of data.
+func sha256Hex(data []byte) string {
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
 }

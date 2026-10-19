@@ -115,7 +115,7 @@ func (m *Module) wanted() []slot {
 		out = append(out, slot{ModelSFace, &m.embedder})
 	}
 	if m.cfg.EnableAge {
-		out = append(out, slot{ModelMiVOLOAge, &m.age})
+		out = append(out, slot{m.cfg.AgeModel, &m.age})
 	}
 	return out
 }

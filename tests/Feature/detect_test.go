@@ -189,15 +189,15 @@ func TestEachStageOnTheCartoonFace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if e.Model.ID != face.ModelSFace || e.Model.Status != onnx.StatusDevOnly {
-		t.Errorf("the embedding carries %+v, want SFace marked dev-only", e.Model)
+	if e.Model.ID != face.ModelSFace || e.Model.Status != onnx.StatusApproved {
+		t.Errorf("the embedding carries %+v, want SFace marked approved", e.Model)
 	}
 
 	age, err := m.EstimateAge(ctx, img, f, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if age.Model.ID != face.ModelMiVOLOAge || age.Model.Status != onnx.StatusDevOnly {
-		t.Errorf("the age estimate carries %+v, want MiVOLO marked dev-only", age.Model)
+	if age.Model.ID != face.ModelMiVOLOAgeConvTranspose || age.Model.Status != onnx.StatusApproved {
+		t.Errorf("the age estimate carries %+v, want the rewritten MiVOLO marked approved", age.Model)
 	}
 }
