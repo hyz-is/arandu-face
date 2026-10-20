@@ -71,10 +71,9 @@ result for the models.
 `GOWORK=off` matters because this checkout may sit beside a Go workspace that
 does not list it.
 
-While `go.mod` replaces `github.com/hyz-is/arandu-onnx` with `../arandu-onnx`,
-build from a checkout that has it beside this one. Once arandu-onnx is required
-at a tag the replace is gone, the checkout builds on its own, and the release
-workflow, which refuses a local replace, can publish this module.
+`go.mod` requires `github.com/hyz-is/arandu-onnx` at a published tag, with no
+replace, so the checkout builds on its own; the release workflow refuses a
+local replace. Local runs and gate logs go in the git-ignored `tmp/`.
 
 `aru doctor` reads applications, not libraries. That is why
 `tests/Unit/audit_test.go` compares `arandu.mod.toml` with what the code calls.
@@ -94,7 +93,7 @@ quality.go    Quality: pure-Go signals and versioned checks
 embed.go      Embed, Compare, ThresholdSet
 age.go        EstimateAge
 manifests/    one manifest per model
-cmd/face-models/  downloads and verifies the model files
+cmd/face-models/  downloads and verifies the model files, and derives the rewritten MiVOLO
 NOTICE             the published constants the stages follow, attributed
 THIRD_PARTY_MODELS.md  the source, digest, licences and status of every model
 ```

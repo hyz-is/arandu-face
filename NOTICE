@@ -34,6 +34,8 @@ published pre- and post-processing parameters:
 Model weights
 
 The ONNX model files are NOT part of this repository and are not distributed
-with it. cmd/face-models downloads them from their upstream sources. Each is
-under its own licence, and two of them are marked dev-only; see
+with it. cmd/face-models downloads them from their upstream sources, and makes
+mivolo_v2_age_convt from the downloaded mivolo_v2_age by a graph rewrite that
+keeps its weights; that derived file is a modification of an Apache-2.0 work
+and carries its licence and notice. Each file is under its own licence; see
 THIRD_PARTY_MODELS.md.

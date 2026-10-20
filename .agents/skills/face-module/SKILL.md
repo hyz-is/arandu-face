@@ -43,6 +43,9 @@ license: MIT
   reference thresholds cosine 0.363 and L2 1.128.
 - MiVOLO v2 age: the export's model card: letterbox 384 on black, RGB/255,
   ImageNet mean and std, face then body, black body when absent.
+- The rewritten MiVOLO (`mivolo_v2_age_convt`, the default `AgeModel`):
+  arandu-onnx v0.3.0's `rewrite.Col2ImToConvTranspose` with default options,
+  on the original pinned by `mivolo_v2_age`. Same preprocessing, same weights.
 
 A change to any of them names its source in the commit message.
 
@@ -64,6 +67,25 @@ version string, a changelog line, and never a boolean added to a result.
    caveats.
 4. Extend `tests/Unit/models_test.go`, and a feature test that runs it on a
    drawn image.
+
+A model is `approved` only when its weights' licence allows commercial use
+(`commercial_use: "yes"`, held by `TestOnlyCommercialModelsAreApproved`) and
+its card's `Review` says who approved it, when, and which risks were accepted.
+Under the maintainer's open-source decision of 2026-10-19, permissive weights
+(Apache-2.0, MIT, BSD) qualify with their training-data gaps recorded as
+accepted risks; non-commercial weights never do.
+
+## A derived model
+
+A file made from another model (a graph rewrite, a quantization) gets its
+own manifest with its own id, file and SHA-256, the original's `source_url`
+and licences, and a card with a `Derivation`: the original's id and digest,
+the rewrite's name, the tool and version, and the equivalence measured.
+`cmd/face-models` makes it from the verified original; a rewrite it does not
+know by name is an error there, so a new kind of derivation is a change to
+the command too. Prove the derivation is deterministic by running the command
+and comparing the digest, and add a feature test that compares the two files
+on the CPU.
 
 ## Golden values
 

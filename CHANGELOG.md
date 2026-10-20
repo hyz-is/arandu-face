@@ -10,6 +10,52 @@ a release is corrected by another release and never by moving a tag.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-19
+
+SFace and MiVOLO are approved, and the age stage runs a MiVOLO graph without
+`Col2Im` by default, so TensorRT and the CUDA provider run it whole. It
+requires `github.com/hyz-is/arandu-onnx` v0.3.0. Every v0.1.0 call site
+builds unchanged; what changes at run time is the default age file, which a
+models directory has to hold (see `UPGRADE.md`).
+
+### Added
+
+- Manifest `mivolo_v2_age_convt` (`age/mivolo_v2_age_convt.onnx`, sha256
+  `cd7826cff39be95bbcbf8e7855a9971137cd0fb5bea8b536e2efee3e201e8333`,
+  approved): `mivolo_v2_age` with its four `Col2Im` nodes rewritten into
+  `Reshape` and a grouped `ConvTranspose` by arandu-onnx v0.3.0. Same
+  weights, same contract, identical outputs on the CPU.
+  `ModelMiVOLOAgeConvTranspose`.
+- `Config.AgeModel`: the MiVOLO file `EnableAge` opens,
+  `ModelMiVOLOAgeConvTranspose` (default, `DefaultAgeModel`) or
+  `ModelMiVOLOAge`; `Validate` refuses any other.
+- `ModelCard.Review` (who set the status, when, on what grounds, and the
+  risks accepted) and `ModelCard.Derivation` (`Derivation{From, FromSHA256,
+  Rewrite, Tool, Equivalence}`, for a file made from another model).
+  `RewriteCol2ImToConvTranspose`.
+- `cmd/face-models` makes a derived model from its verified original
+  (fetched first when missing) with the pure-Go rewrite, and keeps it only
+  when its SHA-256 is the manifest's; it prints `derived`.
+- Tests: the default age graph has no `Col2Im`; the rewritten and original
+  files agree on the CPU; no manifest is approved unless its
+  `commercial_use` is `yes`; the derived manifest points at its original.
+
+### Changed
+
+- `sface_2021dec` and `mivolo_v2_age` move from `dev-only` to `approved`, by
+  the maintainer's decision of 2026-10-19 (ADR-0010 of KUAA) that open-source
+  weights under a permissive licence are eligible for production. The
+  training-data gaps stay recorded in each `ModelCard` as accepted risks.
+  `sface_2021dec`'s `commercial_use` is now `yes`, following the Apache-2.0
+  licence opencv_zoo distributes it with; its `model_license` still says the
+  upstream weights carry no licence of their own.
+- `EstimateAge` runs `mivolo_v2_age_convt` unless `Config.AgeModel` says
+  otherwise; its `AgeEstimate.Model.ID` is that id.
+- With every shipped model approved, `RefuseDevOnly` refuses no
+  configuration; the switch stays for a model added as dev-only.
+- Requires `github.com/hyz-is/arandu-onnx` v0.3.0 (was v0.1.0).
+- `.gitignore` ignores `tmp/`.
+
 ## [0.1.0] - 2026-10-03
 
 The first public release, as `github.com/hyz-is/arandu-face`. It requires

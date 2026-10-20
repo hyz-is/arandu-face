@@ -21,9 +21,9 @@ Each stage is its own call, with its own result:
 | 1. Detection | `Module.Detect(ctx, img)` | YuNet 2026may or BlazeFace short range | `[]Face{Box, Score, Landmarks [5]Point, Keypoints, Detector ModelInfo, Parameters}` |
 | 2. Alignment | `Align(img, landmarks)` | none (Go) | `Aligned{Image 112×112, Transform, Template, Residual}` |
 | 3. Quality | `Quality(img, face, thresholds)` / `Module.Quality` | none (Go) | `QualityReport{Signals, Checks, Thresholds}` |
-| 4. Embedding | `Module.Embed(ctx, aligned)` | SFace 2021dec (**dev-only**) | `Embedding{Vector, Dim 128, Model, Normalization "l2", RawNorm}` |
+| 4. Embedding | `Module.Embed(ctx, aligned)` | SFace 2021dec | `Embedding{Vector, Dim 128, Model, Normalization "l2", RawNorm}` |
 | 5. Comparison | `Compare(a, b, thresholds)` / `Module.Compare` | none (Go) | `Comparison{Cosine, L2, Model, Thresholds}` |
-| 6. Age | `Module.EstimateAge(ctx, img, face, body)` | MiVOLO v2 age (**dev-only**) | `AgeEstimate{Years, BodyUsed, Model, ReportedMAE, Uncertainty}` |
+| 6. Age | `Module.EstimateAge(ctx, img, face, body)` | MiVOLO v2 age, Col2Im rewritten (default) or as published | `AgeEstimate{Years, BodyUsed, Model, ReportedMAE, Uncertainty}` |
 
 No function runs two stages for the caller. Nothing returns a boolean
 verdict.
@@ -50,14 +50,14 @@ verdict.
 | Go | 1.26 or later |
 | cgo | `CGO_ENABLED=1` and a C compiler (the ONNX Runtime binding is cgo) |
 | ONNX Runtime | the shared library, **1.26 or later**; development and CI use **1.30.0**. Installation per operating system is in the [`arandu-onnx` README](https://github.com/hyz-is/arandu-onnx#installing-onnx-runtime) (`brew install onnxruntime` on macOS; the release archive on Linux) |
-| Arandu | framework 0.50 or later, and `github.com/hyz-is/arandu-onnx` |
+| Arandu | framework 0.50 or later, and `github.com/hyz-is/arandu-onnx` v0.3.0 or later |
 | Models | 230 KB (YuNet) or 471 KB (BlazeFace) for detection alone; 39 MB more for embedding, 118 MB more for age. Fetched once with `cmd/face-models` |
 
 ## Install
 
 ```bash
-go get github.com/hyz-is/arandu-face@v0.1.0
-go run github.com/hyz-is/arandu-face/cmd/face-models@v0.1.0 -dir /srv/models
+go get github.com/hyz-is/arandu-face@v0.2.0
+go run github.com/hyz-is/arandu-face/cmd/face-models@v0.2.0 -dir /srv/models
 ```
 
 ## Wire it
@@ -103,8 +103,9 @@ And the registration, inside the `k.Register(...)` call already there, after
 `Boot` initializes the runtime if `arandu-onnx` has not yet, and opens the
 configured models, verifying each; a missing or altered file stops the boot,
 naming the model. With `RefuseDevOnly` set, a configuration that needs a
-dev-only model (SFace, MiVOLO) stops the boot before any file is read, with
-`ErrDevOnlyRefused`. `Health` reports whether the models are open and the
+dev-only model stops the boot before any file is read, with
+`ErrDevOnlyRefused`; every model this version ships is approved, so none is
+refused today. `Health` reports whether the models are open and the
 runtime under them is usable. `Models` lists the `ModelInfo` of each open
 model. `Close` closes the sessions. Registering it adds no route, no table and
 no background loop.
@@ -117,6 +118,7 @@ no background loop.
 | `Detector` | `yunet` | `yunet` or `blazeface` (selfies) |
 | `EnableEmbedding` | `false` | Open SFace at Boot, for Embed |
 | `EnableAge` | `false` | Open MiVOLO at Boot, for EstimateAge |
+| `AgeModel` | `mivolo_v2_age_convt` | The MiVOLO file `EnableAge` opens: `mivolo_v2_age_convt` (`ModelMiVOLOAgeConvTranspose`, Col2Im rewritten, runs whole on TensorRT and CUDA) or `mivolo_v2_age` (`ModelMiVOLOAge`, as published). Same weights, same estimates |
 | `RefuseDevOnly` | `false` | Refuse every configured dev-only model at Boot — the production switch |
 | `DetectMaxSide` | `640` | Longest side YuNet sees, 32 to 4096 |
 | `ScoreThreshold` | `0.9` YuNet, `0.5` BlazeFace | Score a detection needs to be kept |
@@ -206,7 +208,13 @@ The pure-Go pieces are exported for reuse and testing: `DecodeYuNet`,
    letterboxed onto 384×384 black, normalized as RGB/255 with ImageNet mean
    and std, and stacked as six channels; a missing body is an all-black image
    normalized the same way. The output is years. The authors' MAE of 3.65
-   (face and body, LAGENDA) is returned as metadata, not as a bound.
+   (face and body, LAGENDA) is returned as metadata, not as a bound. By
+   default the file is `mivolo_v2_age_convt`: MiVOLO's four `Col2Im` nodes,
+   which TensorRT and ONNX Runtime's CUDA provider have no kernel for, are
+   rewritten into a `Reshape` and a grouped `ConvTranspose` with one-hot
+   weights, so an accelerator runs the whole graph instead of handing those
+   nodes to the CPU. The weights and the numbers are the original's
+   (`AgeModel: face.ModelMiVOLOAge` opens the file as published).
 
 The constants are those of OpenCV's `FaceDetectorYN` and `FaceRecognizerSF`,
 MediaPipe's short-range detector graph, and MiVOLO's preprocessing; the unit
@@ -225,19 +233,29 @@ field for — training data, reported accuracy, caveats — is in its `ModelCard
 | --- | --- | --- | --- | --- | --- |
 | `yunet_2026may` | `face/face_detection_yunet_2026may.onnx` | `ebafce4e3c118d6554634be5c27ab333b4c047a9a8c3faf1d7cf93101c22f0f0` | 230 KB | `Detect` (default) | approved |
 | `blazeface_short_range` | `face/face_detection_short_range.onnx` | `2f2689b040becf555706d2cb978d2f0e3296ea82413734fba9a856c66c5f2b17` | 471 KB | `Detect` with `Detector: blazeface` | approved |
-| `sface_2021dec` | `face/face_recognition_sface_2021dec.onnx` | `0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79` | 39 MB | `Embed`, with `EnableEmbedding` | **dev-only** |
-| `mivolo_v2_age` | `age/mivolo_v2_age.onnx` | `2db5e05be33b3f120518a86f29a4a65eb0a01c2967219b8787a7dead9b796951` | 118 MB | `EstimateAge`, with `EnableAge` | **dev-only** |
+| `sface_2021dec` | `face/face_recognition_sface_2021dec.onnx` | `0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79` | 39 MB | `Embed`, with `EnableEmbedding` | approved |
+| `mivolo_v2_age_convt` | `age/mivolo_v2_age_convt.onnx` | `cd7826cff39be95bbcbf8e7855a9971137cd0fb5bea8b536e2efee3e201e8333` | 118 MB | `EstimateAge`, with `EnableAge` (default `AgeModel`) | approved |
+| `mivolo_v2_age` | `age/mivolo_v2_age.onnx` | `2db5e05be33b3f120518a86f29a4a65eb0a01c2967219b8787a7dead9b796951` | 118 MB | `EstimateAge`, with `AgeModel: mivolo_v2_age`; the original `mivolo_v2_age_convt` is made from | approved |
 
 | id | source (pinned) | code licence | model licence | training data | commercial use |
 | --- | --- | --- | --- | --- | --- |
 | `yunet_2026may` | opencv_zoo, commit [`26cc381e4d25`](https://github.com/opencv/opencv_zoo/tree/26cc381e4d2594bb9f47a26eb8fd96c94a13660d/models/face_detection_yunet) | MIT | MIT | WIDER FACE, distributed under CC BY-NC-ND 4.0. Whether that non-commercial term reaches the weights is unsettled: a recorded risk | yes, by the weights' licence; see the risk |
 | `blazeface_short_range` | Google MediaPipe, exported to ONNX by [yakhyo/mediapipe-face-mesh-onnx](https://github.com/yakhyo/mediapipe-face-mesh-onnx/releases/tag/weights), release `weights` | Apache-2.0 | Apache-2.0 | described by Google's BlazeFace model card | yes |
-| `sface_2021dec` | opencv_zoo, commit [`ba91a3b91d00`](https://github.com/opencv/opencv_zoo/tree/ba91a3b91d00d76e86540d4013f944bd6b514e39/models/face_recognition_sface) | Apache-2.0 | Apache-2.0 as opencv_zoo distributes it; the upstream weights carry no licence | undocumented | **unknown** |
-| `mivolo_v2_age` | iitolstykh/mivolo_v2, age output exported by [Sam-Apostel/mivolo-v2-age-onnx](https://huggingface.co/Sam-Apostel/mivolo-v2-age-onnx/tree/8eb4cd8f5dd4bd28df2c9a43b24bc54d6d139d36), revision `8eb4cd8f5dd4` | Apache-2.0 | Apache-2.0 | partly proprietary, as the authors describe it; a third-party export | licence permits it; kept **dev-only** pending review |
+| `sface_2021dec` | opencv_zoo, commit [`ba91a3b91d00`](https://github.com/opencv/opencv_zoo/tree/ba91a3b91d00d76e86540d4013f944bd6b514e39/models/face_recognition_sface) | Apache-2.0 | Apache-2.0 as opencv_zoo distributes it; the upstream weights carry no licence of their own | undocumented: an accepted, recorded risk | yes, under the licence opencv_zoo distributes it with |
+| `mivolo_v2_age` | iitolstykh/mivolo_v2, age output exported by [Sam-Apostel/mivolo-v2-age-onnx](https://huggingface.co/Sam-Apostel/mivolo-v2-age-onnx/tree/8eb4cd8f5dd4bd28df2c9a43b24bc54d6d139d36), revision `8eb4cd8f5dd4` | Apache-2.0 | Apache-2.0 | partly proprietary, as the authors describe it; a third-party export: an accepted, recorded risk | yes |
+| `mivolo_v2_age_convt` | `mivolo_v2_age` (sha256 `2db5e05b…6951`), its Col2Im rewritten by `github.com/hyz-is/arandu-onnx` v0.3.0 (`rewrite.Col2ImToConvTranspose`) | Apache-2.0 | Apache-2.0, a modification it allows | as `mivolo_v2_age` | yes |
 
 The BlazeFace release tag is mutable; the digest, which equals the release
 asset's published digest, is what pins the file. Full source URLs are in the
 manifests and in [THIRD_PARTY_MODELS.md](THIRD_PARTY_MODELS.md).
+
+SFace and MiVOLO were `dev-only` until v0.2.0. They are approved under the
+maintainer's decision that open-source weights under a permissive licence
+(Apache-2.0, MIT, BSD) are eligible for production; what is not documented
+about their training data stays recorded as an accepted risk in each
+`ModelCard.Review`, not resolved. Non-commercial weights (InsightFace,
+EdgeFace, UTKFace-trained models) stay out, and a unit test refuses an
+approved manifest whose `commercial_use` is not `yes`.
 
 ### `dev-only` and `RefuseDevOnly`
 
@@ -245,16 +263,27 @@ A `dev-only` model loads, and every `ModelInfo` it produces says
 `Status: "dev-only"`, so the evidence the application records shows the signal
 came from a model not cleared for production. With `Config.RefuseDevOnly` set —
 the production switch — `Boot` refuses a configuration that needs a dev-only
-model (SFace through `EnableEmbedding`, MiVOLO through `EnableAge`) before any
-file is read, with `ErrDevOnlyRefused` naming the model. Detection with YuNet or
-BlazeFace, alignment and quality need no dev-only model.
+model before any file is read, with `ErrDevOnlyRefused` naming the model.
+Every model this version ships is approved, so every configuration boots with
+the switch set; it stays for the next model that starts as dev-only.
+
+### The derived age model
+
+`mivolo_v2_age_convt` has no download address of its own: its manifest's
+`source_url` is the original's, and its `ModelCard.Derivation` records the
+original's id and SHA-256, the rewrite, the tool and the equivalence measured
+(the rewritten and original files differ by 0 on the CPU). `cmd/face-models`
+makes it from the verified original — fetching the original first when it is
+missing — with the same pure-Go rewrite, no ONNX Runtime needed, and keeps it
+only when its SHA-256 is the manifest's. A node can also be given the file
+directly; the manifest's digest is what is checked either way.
 
 ### Download and verify
 
 ```bash
-go run github.com/hyz-is/arandu-face/cmd/face-models@v0.1.0 -dir /srv/models
-go run github.com/hyz-is/arandu-face/cmd/face-models@v0.1.0 -dir /srv/models -check
-go run github.com/hyz-is/arandu-face/cmd/face-models@v0.1.0 -dir /srv/models -only yunet_2026may
+go run github.com/hyz-is/arandu-face/cmd/face-models@v0.2.0 -dir /srv/models
+go run github.com/hyz-is/arandu-face/cmd/face-models@v0.2.0 -dir /srv/models -check
+go run github.com/hyz-is/arandu-face/cmd/face-models@v0.2.0 -dir /srv/models -only yunet_2026may
 ```
 
 A models directory holds each file at the path its manifest's `file` says
@@ -285,6 +314,9 @@ dataset is used.
   against ≈ 0.11 to a non-face pattern — a check that alignment is wired, not a
   recognition result.
 - MiVOLO returns one finite value in 0..120 years, identical across runs.
+  The rewritten file has no `Col2Im`, four `ConvTranspose`, and every other
+  operator count of the original, and gives the original's answer exactly
+  (difference 0) on four seeded tensors and eight drawn scenes, on the CPU.
 - Concurrent calls from eight goroutines give the same answers as sequential
   ones, under the race detector.
 
@@ -328,8 +360,9 @@ them. `Align`, `Quality` and `Compare` are pure functions.
   angle; there is no pitch signal and no occlusion signal.
 - The warp is bilinear in floating point; OpenCV quantizes to 1/32 pixel, so
   crops differ from OpenCV's by rounding.
-- SFace and MiVOLO are dev-only: their licences or training data are not
-  settled for commercial use.
+- SFace's upstream weights carry no licence of their own and its training
+  data is undocumented; MiVOLO was trained partly on proprietary data. Both
+  are approved with those facts recorded as accepted risks, not resolved.
 - Every figure above is on synthetic images.
 - Nothing here has been evaluated on photographs of real people. Detection
   rate, embedding error rates, age error and their variation across age, skin

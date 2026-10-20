@@ -1,6 +1,6 @@
 ---
 name: face-package
-description: Install, wire and use the Arandu Face package (Go, Arandu) in an application. Use when the request is to "install arandu-face", "detect a face", "align a face", "compare two faces", "embed a selfie", "estimate age", "check selfie quality", "go get github.com/hyz-is/arandu-face", "wire it into bootstrap/app.go", "download the face models", "the boot fails opening yunet_2026may", "dev-only model refused", "model digest mismatch", "no face found", or when a project's go.mod already requires github.com/hyz-is/arandu-face. Covers the build requirement, the models directory, the wiring and where it goes, the Config fields, each stage's result, and what each error means.
+description: Install, wire and use the Arandu Face package (Go, Arandu) in an application. Use when the request is to "install arandu-face", "detect a face", "align a face", "compare two faces", "embed a selfie", "estimate age", "check selfie quality", "go get github.com/hyz-is/arandu-face", "wire it into bootstrap/app.go", "download the face models", "the boot fails opening yunet_2026may", "the boot fails opening mivolo_v2_age_convt", "dev-only model refused", "model digest mismatch", "no face found", or when a project's go.mod already requires github.com/hyz-is/arandu-face. Covers the build requirement, the models directory, the wiring and where it goes, the Config fields, each stage's result, and what each error means.
 license: MIT
 ---
 
@@ -20,13 +20,16 @@ later) on the machine that runs the application, as `arandu-onnx` requires.
 ## Install and fetch the models
 
 ```bash
-go get github.com/hyz-is/arandu-face@v0.1.0
-go run github.com/hyz-is/arandu-face/cmd/face-models@v0.1.0 -dir /srv/models
+go get github.com/hyz-is/arandu-face@v0.2.0
+go run github.com/hyz-is/arandu-face/cmd/face-models@v0.2.0 -dir /srv/models
 ```
 
 The command downloads every model over HTTPS from its pinned source and keeps
 a file only when its SHA-256 matches; `-check` verifies without connecting,
-`-only` takes ids. Run it where the application is deployed or when its image is
+`-only` takes ids. `mivolo_v2_age_convt`, the default age model, has no address
+of its own: the command makes it from `mivolo_v2_age` (fetched first when
+missing) by a pure-Go graph rewrite and keeps it only when its SHA-256 is the
+manifest's. Run it where the application is deployed or when its image is
 built. The library itself never downloads.
 
 ## The wiring, and where it goes
@@ -48,6 +51,7 @@ configuration (the package reads no environment variable):
 		ModelsDir:       cfg.Face.ModelsDir,
 		EnableEmbedding: cfg.Face.Embedding,
 		EnableAge:       cfg.Face.Age,
+		// AgeModel defaults to face.ModelMiVOLOAgeConvTranspose (no Col2Im).
 		RefuseDevOnly:   cfg.Face.Production,
 	}, onnxModule.Runtime())
 	if err != nil {
@@ -79,8 +83,13 @@ thresholds' versions recorded.
 ## Symptoms to recognise
 
 - **`dev-only model refused`.** `RefuseDevOnly` is set and the configuration
-  enables SFace (`EnableEmbedding`) or MiVOLO (`EnableAge`), which are
-  dev-only. That is the production switch working.
+  needs a model whose manifest is dev-only. No model v0.2.0 ships is
+  (SFace and MiVOLO are approved since v0.2.0), so this names a model added
+  later or an older version of the package.
+- **Boot fails opening `mivolo_v2_age_convt`.** `EnableAge` opens the
+  rewritten MiVOLO by default, and the models directory has only the
+  original. Run the command with `-only mivolo_v2_age_convt`, or set
+  `AgeModel: face.ModelMiVOLOAge` to open the original.
 - **Boot fails opening `<id>` with "no such file".** The models directory is
   not filled, or `ModelsDir` points elsewhere. Run the command with `-check`.
 - **`model digest mismatch`.** The file is not the reviewed one. Fetch it again

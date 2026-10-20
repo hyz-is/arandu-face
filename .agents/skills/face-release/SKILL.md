@@ -48,12 +48,13 @@ network call is written.
 
 The `framework` line is a floor, and `go.mod` says it too. Move both together.
 
-## The replace
+## No replace
 
-`go.mod` replaces `github.com/hyz-is/arandu-onnx` with `../arandu-onnx` while
-that module is unpublished. Before the first tag here: tag arandu-onnx, require
-it at that version, delete the replace and its comment, and run the gates from
-a checkout without the sibling. The release workflow refuses a local replace.
+`go.mod` requires `github.com/hyz-is/arandu-onnx` at a published tag (v0.3.0
+since v0.2.0), with no `replace`: the checkout builds on its own, and the
+release workflow refuses a local replace. A change that needs an unreleased
+arandu-onnx waits for its tag; to try it before, use a `go.work` in the
+git-ignored `tmp/`, never committed.
 
 ## Dependencies
 
